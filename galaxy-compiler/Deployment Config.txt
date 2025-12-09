@@ -1,0 +1,25 @@
+# 使用輕量級的 Python 3.9 映像檔
+FROM python:3.9-slim
+
+# [關鍵] 安裝 G++ 編譯器和必要的系統工具
+# 這確保了你的環境可以編譯 C++ 程式碼
+RUN apt-get update && apt-get install -y \
+    g++ \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 設定工作目錄
+WORKDIR /app
+
+# 複製 requirements.txt 並安裝 Python 套件
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 複製所有程式碼到容器內 (包含 server.py 和 index.html)
+COPY . .
+
+# 暴露連接埠 (Render 會自動忽略這個，但這是好習慣)
+EXPOSE 5000
+
+# 啟動指令：直接執行 server.py
+CMD ["python", "server.py"]

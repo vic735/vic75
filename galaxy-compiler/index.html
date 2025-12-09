@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>C++ Galaxy Compiler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            background-color: #1e1e1e; 
+            color: #d4d4d4; 
+            height: 100dvh; 
+            width: 100vw; 
+            overflow: hidden; 
+        }
+        .CodeMirror { height: 100% !important; width: 100% !important; font-family: 'Fira Code', monospace; }
+        
+        .cm-s-cloudjudge.CodeMirror { background-color: #1e1e1e; color: #d4d4d4; }
+        .cm-s-cloudjudge .CodeMirror-gutters { background: #1e1e1e; color: #858585; border: none; }
+        .cm-s-cloudjudge .CodeMirror-guttermarker, .cm-s-cloudjudge .CodeMirror-guttermarker-subtle, .cm-s-cloudjudge .CodeMirror-linenumber { color: #858585; }
+        .cm-s-cloudjudge .CodeMirror-cursor { border-left: 2px solid #f8f8f0; }
+        .cm-s-cloudjudge div.CodeMirror-selected { background: #3e4451; }
+        .cm-s-cloudjudge.CodeMirror-focused div.CodeMirror-selected { background: #3e4451; }
+        .cm-s-cloudjudge .CodeMirror-line::selection, .cm-s-cloudjudge .CodeMirror-line > span::selection { background: #3e4451; }
+        
+        .cm-s-cloudjudge .cm-keyword { color: #f08d49; font-weight: bold; }
+        .cm-s-cloudjudge .cm-operator { color: #f08d49; }
+        .cm-s-cloudjudge .cm-variable-2 { color: #d4d4d4; } 
+        .cm-s-cloudjudge .cm-variable-3, .cm-s-cloudjudge .cm-type { color: #8be9fd; font-weight: bold; }
+        .cm-s-cloudjudge .cm-builtin { color: #8be9fd; } 
+        .cm-s-cloudjudge .cm-atom { color: #bd93f9; } 
+        .cm-s-cloudjudge .cm-number { color: #bd93f9; }
+        .cm-s-cloudjudge .cm-def { color: #f8f8f2; } 
+        .cm-s-cloudjudge .cm-string { color: #f1fa8c; }
+        .cm-s-cloudjudge .cm-meta { color: #f08d49; }
+        .cm-s-cloudjudge .cm-comment { color: #6272a4; font-style: italic; } 
+
+        .cm-s-cloudjudge .cm-indent-guides {
+            background-image: 
+                linear-gradient(to right, #1e1e1e 4ch, transparent 4ch),
+                repeating-linear-gradient(to right, #666666 0, #666666 1px, transparent 1px, transparent 4ch);
+            background-position: 0 0;
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+        }
+
+        .CodeMirror-hints { background: #252526; border: 1px solid #454545; color: #d4d4d4; font-family: 'Fira Code'; }
+        li.CodeMirror-hint-active { background: #007acc; color: white; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 4px; }
+        
+        .toolbar-btn { padding: 4px; border-radius: 4px; transition: all 0.2s; }
+        .toolbar-btn:hover { background-color: #3e4451; color: #fff; }
+
+        .terminal-cursor { display: inline-block; width: 8px; height: 16px; background-color: #d4d4d4; animation: blink 1s step-end infinite; vertical-align: middle; }
+        @keyframes blink { 50% { opacity: 0; } }
+        
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: background-color 0.3s; }
+        .status-connected { background-color: #4ade80; box-shadow: 0 0 5px #4ade80; }
+        .status-disconnected { background-color: #ef4444; box-shadow: 0 0 5px #ef4444; }
+        
+        .terminal-input-echo { color: #4ade80; }
+        .terminal-output { color: #d4d4d4; }
+        
+        #terminal-container, #terminal-input {
+            font-size: var(--editor-font-size);
+        }
+
+        select.custom-select { 
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); 
+            background-position: right 0.5rem center; 
+            background-repeat: no-repeat; 
+            background-size: 1.5em 1.5em; 
+            padding-right: 2.5rem; 
+            -webkit-appearance: none; 
+            appearance: none; 
+        }
+        select option { background-color: #3c3c3c; color: white; }
+
+        .resizer { background-color: #111; z-index: 20; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s; flex: none; }
+        .resizer:hover, .resizer.resizing { background-color: #3b82f6; }
+        .resizer-icon { color: #6b7280; pointer-events: none; transition: transform 0.2s; }
+        .resizer:hover .resizer-icon, .resizer.resizing .resizer-icon { color: white; }
+
+        .resizer-col { width: 12px; cursor: col-resize; border-left: 1px solid #333; border-right: 1px solid #333; }
+        .resizer-row { height: 12px; cursor: row-resize; border-top: 1px solid #333; border-bottom: 1px solid #333; }
+        .resizer-col .resizer-icon { transform: rotate(90deg); }
+        .resizer-row .resizer-icon { transform: rotate(0deg); }
+
+        @keyframes loading-slide {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(300%); }
+        }
+        .animate-loading-bar {
+            width: 40%;
+            height: 100%;
+            background-color: #eab308;
+            animation: loading-slide 1s infinite linear;
+        }
+        
+        .toolbar-separator {
+            width: 1px;
+            height: 16px;
+            background-color: #454545;
+            margin: 0 4px;
+        }
+    </style>
+</head>
+<body class="flex flex-col select-none overflow-hidden h-[100dvh]">
+
+    <header class="h-14 border-b border-[#333] flex items-center justify-between px-4 bg-[#252526] flex-none z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-7 h-7 rounded bg-blue-600 flex items-center justify-center text-white font-bold text-sm" id="logo-icon">C++</div>
+            <select id="lang-selector" onchange="changeLanguage(this.value)" class="custom-select bg-[#3c3c3c] text-white font-bold text-sm border border-[#333] rounded px-3 py-1.5 focus:outline-none cursor-pointer">
+                <option value="cpp">C++ Galaxy</option>
+                <option value="python">Python 3</option>
+            </select>
+
+            <div class="flex items-center gap-2 ml-2 bg-[#1e1e1e] px-2 py-1 rounded text-xs border border-[#333]" title="伺服器連線狀態">
+                <div id="status-indicator" class="status-dot status-disconnected"></div>
+                <span id="status-text" class="text-gray-500">未連線</span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <select id="layout-selector" onchange="changeLayout(this.value)" class="custom-select bg-[#3c3c3c] text-white font-medium text-xs border border-[#333] rounded px-3 py-1.5 focus:outline-none cursor-pointer" title="切換版面配置">
+                <option value="right">輸出：右側</option>
+                <option value="bottom">輸出：下方</option>
+            </select>
+            <button onclick="stopCode()" class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors hidden" id="stop-btn" title="停止程式執行"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>停止</button>
+            <button onclick="downloadCode()" class="flex items-center gap-2 bg-[#007acc] hover:bg-[#0062a3] text-white px-3 py-1.5 rounded text-sm transition-colors" title="下載程式碼"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span class="hidden md:inline">下載</span></button>
+            <button onclick="runCode()" class="flex items-center gap-2 bg-[#2ea043] hover:bg-[#238636] text-white px-4 py-1.5 rounded text-sm font-medium transition-colors shadow-lg shadow-green-900/20 active:scale-95" id="run-btn" title="執行程式碼"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>執行</button>
+        </div>
+    </header>
+
+    <main id="main-container" class="flex-1 flex flex-row overflow-hidden relative bg-[#1e1e1e] min-h-0">
+        <div id="editor-container" class="flex-1 flex flex-col relative w-1/2 border-r border-[#333] min-h-0">
+            <div class="bg-[#1e1e1e] px-2 py-1 text-xs font-mono text-gray-500 flex justify-between items-center select-none flex-none border-b border-[#333] h-8">
+                <span class="ml-2" id="filename-label">main.cpp</span>
+                <div class="flex items-center gap-1">
+                    <button onclick="changeFontSize(-1)" class="toolbar-btn text-gray-400" title="縮小字體"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" /></svg></button>
+                    <button onclick="resetFontSize()" class="toolbar-btn text-gray-400" title="重置字體大小"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                    <button onclick="changeFontSize(1)" class="toolbar-btn text-gray-400" title="放大字體"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg></button>
+                    <div class="toolbar-separator"></div>
+                    <button onclick="undoCode()" class="toolbar-btn text-gray-400" title="回上一步"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg></button>
+                    <button id="copy-btn" onclick="copyCode()" class="toolbar-btn text-gray-400" title="全選並複製"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></button>
+                    <button onclick="clearAllCode()" class="toolbar-btn text-gray-400 hover:text-red-400" title="刪除全部"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                    <button onclick="insertHelloWorld()" class="toolbar-btn text-gray-400 hover:text-yellow-300" title="插入 Hello World"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg></button>
+                    <button onclick="clearAndPaste()" class="toolbar-btn text-gray-400 hover:text-blue-400" title="刪除全部並貼上"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-hidden relative w-full h-full min-h-0">
+                <textarea id="code-editor">#include <iostream>
+using namespace std;
+
+int main() {
+    cout << "Hello World" << endl;
+    return 0;
+}</textarea>
+            </div>
+        </div>
+        
+        <div id="resizer" class="resizer resizer-col" title="拖曳調整視窗大小">
+            <svg class="resizer-icon h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+        </div>
+        
+        <div id="output-container-wrapper" class="flex-1 flex flex-col bg-[#1e1e1e] w-1/2 min-h-0">
+            <div class="bg-[#1e1e1e] px-4 py-1 text-xs font-bold text-gray-500 border-b border-[#333] flex justify-between flex-none h-8 items-center">
+                <span>互動式終端機 (Terminal)</span>
+                <button onclick="clearOutput()" class="hover:text-white" title="清除終端機內容">清除</button>
+            </div>
+            
+            <div class="p-2 border-b border-[#333] bg-[#252526] flex-none">
+                <input type="text" id="terminal-input" class="w-full bg-[#3c3c3c] text-white px-3 py-1 rounded border border-[#555] focus:outline-none focus:border-[#007acc] font-mono text-sm" placeholder="在此輸入 (Enter 發送)..." disabled autocomplete="off">
+            </div>
+
+            <div id="terminal-container" class="flex-1 p-4 font-mono text-sm overflow-auto text-gray-300 relative min-h-0" onclick="focusInput()">
+                <pre id="output" class="whitespace-pre-wrap break-words inline font-[Fira_Code]"></pre><span class="terminal-cursor"></span>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
+
+    <script>
+        var socket = io();
+        var isRunning = false;
+        var statusDot = document.getElementById('status-indicator');
+        var statusText = document.getElementById('status-text');
+        var currentLayout = 'right';
+        var fontSize = 14;
+        var currentLang = 'cpp'; 
+        var isChangingLang = false; // 防止切換語言時重複儲存
+
+        window.addEventListener('beforeunload', function (e) { e.preventDefault(); e.returnValue = ''; });
+
+        var cppKeywords = [
+            "#include", "iostream","cstdlib","iomanip", "using", "namespace", "std", "int", "main", "return", "cout", "endl", "cin", 
+            "vector", "string", "void", "char", "bool", "float", "double", "if", "else", "for", "while", "do", 
+            "switch", "case", "break", "continue", "struct", "class", "public", "private", "protected", "true", "false",
+            "const", "auto", "size_t", "push_back", "pop_back", "length", "size", "begin", "end", "algorithm", "cmath"
+        ];
+        
+        var pythonKeywords = [
+            "print", "import", "from", "def", "return", "if", "elif", "else", "for", "while", "break", "continue", "pass", "class", 
+            "try", "except", "finally", "with", "as", "lambda", "True", "False", "None", "and", "or", "not", "is", "in", "global", "range", "len", "input", "int", "str", "list", "dict"
+        ];
+
+        function codeHint(editor) {
+            var cur = editor.getCursor();
+            var token = editor.getTokenAt(cur);
+            var word = token.string;
+            var start = token.start;
+            var end = cur.ch;
+            
+            if (token.end > cur.ch) word = word.slice(0, cur.ch - token.start);
+            if (!/^[\w#]+$/.test(word)) {
+                var line = editor.getLine(cur.line);
+                var i = cur.ch - 1;
+                while (i >= 0 && /[\w#]/.test(line.charAt(i))) i--;
+                start = i + 1;
+                word = line.slice(start, cur.ch);
+            }
+            if (!word) return;
+            
+            var keywords = currentLang === 'cpp' ? cppKeywords : pythonKeywords;
+            var list = keywords.filter(function(item) { return item.startsWith(word); });
+            
+            return { list: list, from: CodeMirror.Pos(cur.line, start), to: CodeMirror.Pos(cur.line, end) };
+        }
+
+        var editor = CodeMirror.fromTextArea(document.getElementById("code-editor"), {
+            mode: "text/x-c++src", theme: "cloudjudge", lineNumbers: true, matchBrackets: true, autoCloseBrackets: true, indentUnit: 4, tabSize: 4, lineWrapping: true,
+            extraKeys: {
+                "Ctrl-Space": "autocomplete",
+                "Enter": function(cm) {
+                    if (cm.getOption("disableInput")) return CodeMirror.Pass;
+                    var cursor = cm.getCursor(); var line = cm.getLine(cursor.line);
+                    if (line.charAt(cursor.ch - 1) === '{' && line.charAt(cursor.ch) === '}') {
+                        cm.execCommand("newlineAndIndent"); cm.replaceSelection("\n", "start"); var newCursor = cm.getCursor();
+                        cm.indentLine(newCursor.line, null, true); cm.indentLine(newCursor.line + 1, null, true);
+                        cm.setCursor(newCursor.line, cm.getLine(newCursor.line).length); return;
+                    } 
+                    if (currentLang === 'python' && line.trim().endsWith(':')) {
+                         cm.execCommand("newlineAndIndent"); return;
+                    }
+                    return CodeMirror.Pass; 
+                },
+                "Backspace": function(cm) {
+                    if (cm.getOption("disableInput")) return CodeMirror.Pass;
+                    if (cm.somethingSelected()) return CodeMirror.Pass;
+                    var cursor = cm.getCursor();
+                    var prefix = cm.getLine(cursor.line).slice(0, cursor.ch);
+                    if (/^\s*$/.test(prefix) && prefix.length > 0) {
+                        var indentUnit = cm.getOption("indentUnit"); var len = prefix.length;
+                        var spacesToDelete = len % indentUnit || indentUnit;
+                        var from = {line: cursor.line, ch: cursor.ch - spacesToDelete};
+                        cm.replaceRange("", from, cursor);
+                    } else { return CodeMirror.Pass; }
+                }
+            }
+        });
+
+        // 載入設定：讀取儲存的語言偏好與程式碼
+        function loadSettings() {
+            isChangingLang = true; // 避免觸發 change 事件覆寫
+            
+            // 1. 載入字體
+            const savedFontSize = localStorage.getItem("galaxy_font_size");
+            if (savedFontSize) {
+                fontSize = parseInt(savedFontSize);
+                document.documentElement.style.setProperty('--editor-font-size', fontSize + 'px');
+            }
+            
+            // 2. 載入語言偏好
+            const savedLang = localStorage.getItem("galaxy_lang");
+            if(savedLang) {
+                currentLang = savedLang;
+                document.getElementById('lang-selector').value = savedLang;
+                updateLangUI(savedLang); // 更新 UI 圖示與模式
+            }
+            
+            // 3. 載入對應語言的程式碼
+            const savedCode = localStorage.getItem("galaxy_code_" + currentLang);
+            if (savedCode) {
+                editor.setValue(savedCode);
+            } else {
+                // 如果該語言沒有存檔，載入預設範本
+                insertHelloWorld(true); 
+            }
+            
+            isChangingLang = false;
+        }
+
+        // 自動存檔：監聽編輯器變更，存入對應語言的 key
+        editor.on("change", function() {
+            if (!isChangingLang) {
+                localStorage.setItem("galaxy_code_" + currentLang, editor.getValue());
+            }
+        });
+        
+        loadSettings(); // 初始化
+
+        function changeFontSize(delta) {
+            fontSize += delta;
+            if (fontSize < 10) fontSize = 10; if (fontSize > 32) fontSize = 32;
+            document.documentElement.style.setProperty('--editor-font-size', fontSize + 'px');
+            localStorage.setItem("galaxy_font_size", fontSize); editor.refresh();
+        }
+
+        function resetFontSize() {
+            fontSize = 14;
+            document.documentElement.style.setProperty('--editor-font-size', fontSize + 'px');
+            localStorage.setItem("galaxy_font_size", fontSize); editor.refresh();
+        }
+        
+        // 更新語言 UI 與 CodeMirror 模式 (不涉及存檔)
+        function updateLangUI(lang) {
+            if (lang === 'cpp') {
+                editor.setOption("mode", "text/x-c++src");
+                document.getElementById('filename-label').innerText = 'main.cpp';
+                document.getElementById('logo-icon').innerText = 'C++';
+                document.getElementById('logo-icon').className = "w-7 h-7 rounded bg-blue-600 flex items-center justify-center text-white font-bold text-sm";
+            } else {
+                editor.setOption("mode", "text/x-python");
+                document.getElementById('filename-label').innerText = 'main.py';
+                document.getElementById('logo-icon').innerText = 'Py';
+                document.getElementById('logo-icon').className = "w-7 h-7 rounded bg-yellow-500 flex items-center justify-center text-white font-bold text-sm";
+            }
+        }
+
+        // 切換語言邏輯
+        function changeLanguage(newLang) {
+            if (newLang === currentLang) return;
+
+            // 1. 先存檔目前的程式碼 (雖然 on change 會存，但切換前強制存一次保險)
+            localStorage.setItem("galaxy_code_" + currentLang, editor.getValue());
+            
+            isChangingLang = true; // 暫停自動存檔監聽，避免載入新代碼時覆蓋舊的
+            
+            // 2. 更新語言狀態
+            currentLang = newLang;
+            localStorage.setItem("galaxy_lang", newLang);
+            updateLangUI(newLang);
+            
+            // 3. 讀取新語言的程式碼
+            const savedCode = localStorage.getItem("galaxy_code_" + newLang);
+            if (savedCode) {
+                editor.setValue(savedCode);
+            } else {
+                insertHelloWorld(true); // 如果沒存檔，給範本
+            }
+            
+            isChangingLang = false; // 恢復監聽
+        }
+
+        editor.addOverlay({ token: function(stream) { if (stream.sol()) { if (stream.eatSpace()) return "indent-guides"; } stream.skipToEnd(); return null; } });
+        editor.on("keyup", function (cm, event) { if (!cm.state.completionActive && event.keyCode >= 65 && event.keyCode <= 90 || event.key === "#") CodeMirror.commands.autocomplete(cm, null, {completeSingle: false}); });
+        CodeMirror.registerHelper("hint", "clike", codeHint); 
+        CodeMirror.registerHelper("hint", "python", codeHint);
+
+        const outputPre = document.getElementById('output');
+        const inputField = document.getElementById('terminal-input');
+        const runBtn = document.getElementById('run-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const terminalContainer = document.getElementById('terminal-container');
+        const resizer = document.getElementById('resizer');
+        const mainContainer = document.getElementById('main-container');
+        const editorContainer = document.getElementById('editor-container');
+        const outputWrapper = document.getElementById('output-container-wrapper');
+
+        socket.on('connect', () => { 
+            console.log("Connected to server"); 
+            statusDot.className = "status-dot status-connected";
+            statusText.innerText = "已連線";
+            statusText.className = "text-green-500 text-xs";
+        });
+        socket.on('disconnect', () => { 
+            statusDot.className = "status-dot status-disconnected";
+            statusText.innerText = "斷線";
+            statusText.className = "text-red-500 text-xs";
+        });
+
+        socket.on('program_output', (msg) => {
+            const loader = document.getElementById('compile-loader');
+            if (loader) loader.remove();
+            
+            outputPre.innerHTML += `<span class="terminal-output">${msg.data}</span>`; 
+            terminalContainer.scrollTop = terminalContainer.scrollHeight;
+        });
+
+        socket.on('program_status', (msg) => {
+            if (msg.status === 'finished') {
+                outputPre.innerHTML += `<span class="text-gray-500">\n[code end]</span>`; 
+                terminalContainer.scrollTop = terminalContainer.scrollHeight;
+                setRunningState(false);
+            } else if (msg.status === 'error') {
+                const loader = document.getElementById('compile-loader');
+                if (loader) loader.remove();
+                setRunningState(false);
+            }
+        });
+
+        function setRunningState(running) {
+            isRunning = running;
+            if (running) {
+                runBtn.classList.add('hidden'); stopBtn.classList.remove('hidden');
+                inputField.disabled = false; inputField.focus(); 
+                outputPre.innerHTML = '<div id="compile-loader" class="mb-2 text-left">' +
+                    '<span class="text-yellow-500 font-bold text-xs">[編譯與啟動中...]</span>' +
+                    '<div class="w-32 h-1 bg-gray-700 mt-1 rounded overflow-hidden relative">' +
+                        '<div class="absolute top-0 left-0 h-full bg-yellow-500 animate-loading-bar"></div>' +
+                    '</div>' +
+                '</div>';
+            } else {
+                runBtn.classList.remove('hidden'); stopBtn.classList.add('hidden');
+                inputField.disabled = true; inputField.value = "";
+            }
+        }
+
+        function runCode() { 
+            setRunningState(true); 
+            socket.emit('run_code_v2', { code: editor.getValue(), lang: currentLang }); 
+        }
+        
+        function stopCode() { 
+            socket.emit('stop_code'); 
+            const loader = document.getElementById('compile-loader');
+            if (loader) loader.remove();
+            setRunningState(false); 
+        }
+        function clearOutput() { outputPre.innerHTML = ""; }
+        function focusInput() { if (isRunning) inputField.focus(); }
+        function undoCode() { editor.undo(); }
+        function copyCode() {
+            editor.execCommand('selectAll'); editor.focus();
+            navigator.clipboard.writeText(editor.getValue()).then(() => {
+                const btn = document.getElementById('copy-btn'); const originalContent = btn.innerHTML;
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
+                setTimeout(() => { btn.innerHTML = originalContent; }, 2000);
+            });
+        }
+        function clearAllCode() { if (confirm("確定要刪除所有程式碼嗎？此動作無法復原。")) { editor.setValue(""); clearOutput(); } }
+        
+        function insertHelloWorld(auto = false) {
+            if (!auto && !confirm("確定要清空目前內容並插入 Hello World 範本嗎？")) return;
+            if (currentLang === 'cpp') {
+                editor.setValue('#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello World" << endl;\n    return 0;\n}');
+            } else {
+                editor.setValue('print("Hello Galaxy Python!")\n\n# 試試看輸入資料\nname = input("Please enter your name: ")\nprint(f"Nice to meet you, {name}!")');
+            }
+        }
+        
+        async function clearAndPaste() {
+            if (confirm("確定要刪除全部並貼上剪貼簿內容嗎？")) {
+                try { const text = await navigator.clipboard.readText(); editor.setValue(text); } catch (err) { alert("無法讀取剪貼簿"); }
+            }
+        }
+        function downloadCode() {
+            const code = editor.getValue(); 
+            let ext = currentLang === 'cpp' ? '.cpp' : '.py';
+            let filename = prompt(`請輸入檔案名稱 (無需輸入 ${ext}):`, "main");
+            if (filename === null) return; if (filename.trim() === "") filename = "main";
+            if (!filename.endsWith(ext)) filename += ext;
+            const blob = new Blob([code], { type: "text/plain" }); const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+        inputField.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const text = inputField.value; outputPre.innerHTML += `<span class="terminal-input-echo">${text}</span>\n`;
+                socket.emit('send_input', { input: text }); inputField.value = "";
+            }
+        });
+        
+        let isResizing = false;
+        resizer.addEventListener('mousedown', (e) => { e.preventDefault(); isResizing = true; document.body.style.cursor = currentLayout === 'bottom' ? 'row-resize' : 'col-resize'; document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', stopResize); });
+        function handleMouseMove(e) {
+            if (!isResizing) return; const containerRect = mainContainer.getBoundingClientRect();
+            if (currentLayout === 'bottom') {
+                let newHeightPercent = ((e.clientY - containerRect.top) / containerRect.height) * 100;
+                newHeightPercent = Math.max(10, Math.min(90, newHeightPercent));
+                editorContainer.style.flex = `0 0 ${newHeightPercent}%`; outputWrapper.style.flex = `0 0 ${100 - newHeightPercent}%`;
+            } else {
+                let newWidthPercent = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+                newWidthPercent = Math.max(10, Math.min(90, newWidthPercent));
+                editorContainer.style.flex = `0 0 ${newWidthPercent}%`; outputWrapper.style.flex = `0 0 ${100 - newWidthPercent}%`;
+            }
+            editor.refresh();
+        }
+        function stopResize() { isResizing = false; document.body.style.cursor = 'default'; document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', stopResize); }
+        
+        function changeLayout(mode) {
+            currentLayout = mode;
+            const main = document.getElementById('main-container');
+            const resizer = document.getElementById('resizer');
+            const icon = resizer.querySelector('svg');
+            if (mode === 'bottom') {
+                main.classList.remove('flex-row'); main.classList.add('flex-col');
+                resizer.className = 'resizer resizer-row'; resizer.style.cursor = 'row-resize';
+                if(icon) icon.style.transform = 'rotate(0deg)';
+                editorContainer.classList.remove('w-1/2'); editorContainer.classList.add('w-full');
+                outputWrapper.classList.remove('w-1/2'); outputWrapper.classList.add('w-full');
+                editorContainer.style.flex = '0 0 50%'; outputWrapper.style.flex = '0 0 50%';
+            } else {
+                main.classList.remove('flex-col'); main.classList.add('flex-row');
+                resizer.className = 'resizer resizer-col'; resizer.style.cursor = 'col-resize';
+                if(icon) icon.style.transform = 'rotate(90deg)';
+                editorContainer.classList.remove('w-full'); editorContainer.classList.add('w-1/2');
+                outputWrapper.classList.remove('w-full'); outputWrapper.classList.add('w-1/2');
+                editorContainer.style.flex = '0 0 50%'; outputWrapper.style.flex = '0 0 50%';
+            }
+            editor.refresh();
+        }
+        
+        setTimeout(() => {
+             const resizer = document.getElementById('resizer');
+             const icon = resizer.querySelector('svg');
+             if(icon) icon.style.transform = 'rotate(90deg)'; 
+        }, 100);
+    </script>
+</body>
+</html>
